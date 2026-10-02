@@ -2,7 +2,6 @@
 # Práctica final visualización de datos (Streamlit)
 # Pilar Pérez Hernández - 2ºB iMAT
 
-import os
 from pathlib import Path
 
 import gdown
