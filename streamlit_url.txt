@@ -1,1 +1,1 @@
-https://practicafinalvisualizaciondatospilarperezhernadez-84tumpmskg3a.streamlit.app/
+https://pilar-sales-dashboard.streamlit.app/

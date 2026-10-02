@@ -65,13 +65,27 @@ def cargar_datos(ruta_csv: str) -> pd.DataFrame:
 ID_PARTE_1 = "1-0CxQfbxc3lwkDHU7Zl0mzSjFwlsLbvI"
 ID_PARTE_2 = "1eif2evxhhRvJnnEo6a0Dsz77avdJJhlw"
 
-CSV_PARTE_1 = asegurar_csv_drive(ID_PARTE_1, "parte_1.csv")
-CSV_PARTE_2 = asegurar_csv_drive(ID_PARTE_2, "parte_2.csv")
+# Fichero compacto con las columnas que usa el dashboard (ver preparar_datos.py).
+# Los dos CSV originales (350 MB) no caben en la memoria de Streamlit Cloud.
+PARQUET_COMPACTO = "data_ventas.parquet"
 
-df_1 = cargar_datos(CSV_PARTE_1)
-df_2 = cargar_datos(CSV_PARTE_2)
 
-df = pd.concat([df_1, df_2], ignore_index=True).drop_duplicates()
+@st.cache_resource(show_spinner=True)
+def cargar_datos_parquet(ruta: str) -> pd.DataFrame:
+    # cache_resource en vez de cache_data: así no se copia el DataFrame en cada ejecución
+    return pd.read_parquet(ruta)
+
+
+if Path(PARQUET_COMPACTO).exists():
+    df = cargar_datos_parquet(PARQUET_COMPACTO)
+else:
+    CSV_PARTE_1 = asegurar_csv_drive(ID_PARTE_1, "parte_1.csv")
+    CSV_PARTE_2 = asegurar_csv_drive(ID_PARTE_2, "parte_2.csv")
+
+    df_1 = cargar_datos(CSV_PARTE_1)
+    df_2 = cargar_datos(CSV_PARTE_2)
+
+    df = pd.concat([df_1, df_2], ignore_index=True).drop_duplicates()
 
 
 def fmt_int(x) -> str:
@@ -89,43 +103,45 @@ def fmt_money(x, decimals=2) -> str:
         return "—"
 
 
-@st.cache_data(show_spinner=False)
-def agregados_pestana_1(df_in: pd.DataFrame) -> dict:
+@st.cache_resource(show_spinner=False)
+def agregados_pestana_1(_df_in: pd.DataFrame) -> dict:
+    # el guion bajo evita que Streamlit tenga que hashear los 3 millones de filas en cada ejecución
+    df_in = _df_in
     top_productos = (
-        df_in.groupby("family", as_index=False)
+        df_in.groupby("family", as_index=False, observed=True)
         .agg(sales=("sales", "mean"))
         .sort_values("sales", ascending=False)
         .head(10)
     )
 
     ventas_por_tienda = (
-        df_in.groupby("store_nbr", as_index=False)
+        df_in.groupby("store_nbr", as_index=False, observed=True)
         .agg(sales=("sales", "mean"))
         .sort_values("sales", ascending=False)
     )
 
     df_promo = df_in[df_in["onpromotion"] > 0].copy()
     top_tiendas_promo = (
-        df_promo.groupby("store_nbr", as_index=False)
+        df_promo.groupby("store_nbr", as_index=False, observed=True)
         .agg(sales=("sales", "mean"))
         .sort_values("sales", ascending=False)
         .head(10)
     )
 
     media_por_dia = (
-        df_in.groupby("day_of_week", as_index=False)
+        df_in.groupby("day_of_week", as_index=False, observed=True)
         .agg(sales=("sales", "mean"))
         .sort_values("sales", ascending=False)
     )
 
     media_por_semana = (
-        df_in.groupby("week", as_index=False)
+        df_in.groupby("week", as_index=False, observed=True)
         .agg(sales=("sales", "mean"))
         .sort_values("week")
     )
 
     media_por_mes = (
-        df_in.groupby("month", as_index=False)
+        df_in.groupby("month", as_index=False, observed=True)
         .agg(sales=("sales", "mean"))
         .sort_values("month")
     )
@@ -300,7 +316,7 @@ with tab2:
         tiendas = sorted(df["store_nbr"].dropna().unique().tolist())
 
         ventas_totales_todas = (
-            df.groupby("store_nbr", as_index=False)
+            df.groupby("store_nbr", as_index=False, observed=True)
             .agg(sales=("sales", "sum"))
             .sort_values("sales", ascending=False)
         )
@@ -323,7 +339,7 @@ with tab2:
             st.warning("No existe la columna 'year' en el dataset.")
         else:
             ventas_por_ano = (
-                df_tienda.groupby("year", as_index=False)
+                df_tienda.groupby("year", as_index=False, observed=True)
                 .agg(sales=("sales", "sum"))
                 .sort_values("year")
             )
@@ -374,7 +390,7 @@ with tab3:
         estados = sorted(df["state"].dropna().unique().tolist())
 
         ventas_por_estado = (
-            df.groupby("state", as_index=False)
+            df.groupby("state", as_index=False, observed=True)
             .agg(sales=("sales", "sum"))
             .sort_values("sales", ascending=False)
         )
@@ -398,7 +414,7 @@ with tab3:
         else:
             df_estado["transactions"] = pd.to_numeric(df_estado["transactions"], errors="coerce").fillna(0)
             trans_por_ano = (
-                df_estado.groupby("year", as_index=False)
+                df_estado.groupby("year", as_index=False, observed=True)
                 .agg(transactions=("transactions", "sum"))
                 .sort_values("year")
             )
@@ -417,7 +433,7 @@ with tab3:
             st.warning("No existe la columna 'store_nbr' en el dataset.")
         else:
             ranking_tiendas = (
-                df_estado.groupby("store_nbr", as_index=False)
+                df_estado.groupby("store_nbr", as_index=False, observed=True)
                 .agg(sales=("sales", "sum"))
                 .sort_values("sales", ascending=False)
                 .head(10)
@@ -446,7 +462,7 @@ with tab3:
             st.warning("No existe 'store_nbr' o 'family' en el dataset, así que no puedo calcular el producto líder.")
         else:
             ventas_por_tienda_estado = (
-                df_estado.groupby("store_nbr", as_index=False)
+                df_estado.groupby("store_nbr", as_index=False, observed=True)
                 .agg(sales=("sales", "sum"))
                 .sort_values("sales", ascending=False)
             )
@@ -458,7 +474,7 @@ with tab3:
                 df_tienda_lider = df_estado[df_estado["store_nbr"] == tienda_lider].copy()
 
                 top_productos_tienda = (
-                    df_tienda_lider.groupby("family", as_index=False)
+                    df_tienda_lider.groupby("family", as_index=False, observed=True)
                     .agg(sales=("sales", "sum"))
                     .sort_values("sales", ascending=False)
                     .head(10)
@@ -488,8 +504,9 @@ with tab4:
     if "onpromotion" not in df.columns:
         st.warning("No existe la columna 'onpromotion' en el dataset; no se puede analizar promociones.")
     else:
-        df_aux = df.copy()
-        df_aux["en_promo"] = df_aux["onpromotion"] > 0
+        df_aux = df
+        if "en_promo" not in df_aux.columns:
+            df_aux["en_promo"] = df_aux["onpromotion"] > 0
 
         anos = sorted(df_aux["year"].dropna().unique().tolist()) if "year" in df_aux.columns else []
         if not anos:
@@ -510,7 +527,7 @@ with tab4:
             c3.metric("% ventas en promoción", f"{pct_promo:.1f}%")
 
             promo_mes_year = (
-                df_year.groupby(["month", "en_promo"], as_index=False)
+                df_year.groupby(["month", "en_promo"], as_index=False, observed=True)
                 .agg(sales=("sales", "sum"))
                 .sort_values("month")
             )
@@ -554,14 +571,14 @@ with tab4:
             st.markdown("### 2) Familias donde la promoción tiene más peso (Top 10)")
 
             if "family" in df_year.columns and "sales" in df_year.columns:
-                ventas_family = df_year.groupby("family", as_index=False).agg(ventas_totales=("sales", "sum"))
+                ventas_family = df_year.groupby("family", as_index=False, observed=True).agg(ventas_totales=("sales", "sum"))
                 ventas_family_promo = (
                     df_year[df_year["en_promo"]]
-                    .groupby("family", as_index=False)
+                    .groupby("family", as_index=False, observed=True)
                     .agg(ventas_promo=("sales", "sum"))
                 )
 
-                family_merge = ventas_family.merge(ventas_family_promo, on="family", how="left").fillna(0)
+                family_merge = ventas_family.merge(ventas_family_promo, on="family", how="left").fillna({"ventas_promo": 0})
                 family_merge["%_promo"] = (
                     family_merge["ventas_promo"] / family_merge["ventas_totales"] * 100
                 ).fillna(0)
@@ -587,10 +604,10 @@ with tab4:
                 df_p = df_year[df_year["en_promo"]].copy()
                 df_np = df_year[~df_year["en_promo"]].copy()
 
-                mean_p = df_p.groupby("family", as_index=False).agg(mean_sales_promo=("sales", "mean"))
-                mean_np = df_np.groupby("family", as_index=False).agg(mean_sales_no_promo=("sales", "mean"))
+                mean_p = df_p.groupby("family", as_index=False, observed=True).agg(mean_sales_promo=("sales", "mean"))
+                mean_np = df_np.groupby("family", as_index=False, observed=True).agg(mean_sales_no_promo=("sales", "mean"))
 
-                uplift = mean_np.merge(mean_p, on="family", how="outer").fillna(0)
+                uplift = mean_np.merge(mean_p, on="family", how="outer").fillna({"mean_sales_promo": 0, "mean_sales_no_promo": 0})
                 uplift["uplift"] = 0.0
 
                 mask = uplift["mean_sales_no_promo"] > 0
@@ -631,7 +648,7 @@ with tab4:
 
                 top_holiday = (
                     df_h[df_h["es_festivo"]]
-                    .groupby("holiday_type", as_index=False)
+                    .groupby("holiday_type", as_index=False, observed=True)
                     .agg(sales_mean=("sales", "mean"))
                     .sort_values("sales_mean", ascending=False)
                     .head(10)
@@ -666,9 +683,9 @@ with tab4:
                 )
 
                 if metrica == "Media de ventas":
-                    heat = df_year.groupby(["month", "day_of_week"], as_index=False).agg(sales=("sales", "mean"))
+                    heat = df_year.groupby(["month", "day_of_week"], as_index=False, observed=True).agg(sales=("sales", "mean"))
                 else:
-                    heat = df_year.groupby(["month", "day_of_week"], as_index=False).agg(sales=("sales", "sum"))
+                    heat = df_year.groupby(["month", "day_of_week"], as_index=False, observed=True).agg(sales=("sales", "sum"))
 
                 orden_en = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
                 orden_es = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]

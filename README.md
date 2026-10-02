@@ -6,12 +6,12 @@ Final assignment for Data Visualisation, 2nd year of IMAT (ICAI – Universidad 
 
 Interactive dashboard built with Streamlit and Plotly on a retail sales dataset of about 350 MB (daily sales per store and product family, with promotions, transactions, store state and holiday information). The interface and the chart labels are in Spanish.
 
-**Deployed on Streamlit Community Cloud:** https://practicafinalvisualizaciondatospilarperezhernadez-84tumpmskg3a.streamlit.app/ (also in `streamlit_url.txt`). The first load may take a while because the app has to download the data.
+**Deployed on Streamlit Community Cloud:** https://pilar-sales-dashboard.streamlit.app/ (also in `streamlit_url.txt`).
 
 
 ## Data
 
-The dataset is split into two CSV files, `parte_1.csv` and `parte_2.csv`, hosted on Google Drive. They are not in the repository because of their size; `app.py` downloads them with `gdown` the first time it runs (the Drive file IDs are hardcoded in the script) and keeps them next to `app.py`, so later runs read the local copies. The two parts are concatenated and de-duplicated into a single DataFrame.
+The original dataset (Favorita-style store sales, about 3 million rows) came as two CSV files of 350 MB in total, `parte_1.csv` and `parte_2.csv`, hosted on Google Drive. Loading them whole needs about 2.5 GB of RAM, more than Streamlit Community Cloud provides, so the app now reads `data_ventas.parquet`: the same rows (concatenated and de-duplicated) restricted to the 12 columns the dashboard uses, with categorical and downcast numeric types. It weighs 7 MB on disk and about 80 MB in memory, and it is generated from the two CSVs by `preparar_datos.py`. If the Parquet file is missing, `app.py` falls back to downloading the CSVs with `gdown` (the Drive file IDs are in the script).
 
 Columns the app relies on: `date`, `store_nbr`, `family` (product family), `sales`, `onpromotion`, `transactions`, `state`, `holiday_type`, `year`, `month`, `week` and `day_of_week`. A leftover `Unnamed: 0` index column is dropped on load and the numeric columns are coerced with `pd.to_numeric`.
 
@@ -38,7 +38,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Python 3.10 or newer. The first start downloads the two CSVs from Google Drive (a few hundred MB), so it needs an internet connection and some patience; after that, as long as the files stay in the folder, the app starts straight from disk. The CSVs are ignored by git (`*.csv` in `.gitignore`).
+Python 3.10 or newer. The app starts straight from `data_ventas.parquet`, so no download is needed. To rebuild the Parquet from the original CSVs, put `parte_1.csv` and `parte_2.csv` next to the script and run `python preparar_datos.py` (the CSVs are ignored by git).
 
 
 ## Files
@@ -46,6 +46,8 @@ Python 3.10 or newer. The first start downloads the two CSVs from Google Drive (
 ```
 .
 ├── app.py              The whole dashboard
+├── data_ventas.parquet Compact dataset read by the app (7 MB)
+├── preparar_datos.py   Builds data_ventas.parquet from the two original CSVs
 ├── requirements.txt    streamlit, pandas, plotly, pyarrow, gdown
 ├── streamlit_url.txt   Public URL of the deployed app
 ├── README.md           This file

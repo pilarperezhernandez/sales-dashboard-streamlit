@@ -1,3 +1,4 @@
-*.csv
+parte_1.csv
+parte_2.csv
 __pycache__/
 .venv/
